@@ -1,0 +1,9 @@
+# Train/val/test sets
+train: train/images
+val: train/images  # Using same set for validation (not ideal but works)
+
+# Number of classes
+nc: 1
+
+# Class names
+names: ['license_plate']
