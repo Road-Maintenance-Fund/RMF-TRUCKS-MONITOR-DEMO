@@ -10,16 +10,15 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # YOLO model configuration
-# Available models: yolov8n.pt, yolov8s.pt, yolov8m.pt, yolov8l.pt, yolov8x.pt
-# Larger models are more accurate but slower
+# Using the newly trained models from Colab training
 YOLO_MODEL = 'yolov8s.pt'  # For truck/vehicle detection
-PLATE_MODEL = 'plates.pt'   # Specialized model for license plate detection
-CONFIDENCE_THRESHOLD = 0.3  # Confidence threshold for vehicle detection
+PLATE_MODEL = 'best.pt'     # Using the newly trained plate detection model
+CONFIDENCE_THRESHOLD = 0.25  # Lowered threshold for better detection recall
 
 # License plate detection settings
-PLATE_CONFIDENCE = 0.5  # Minimum confidence for license plate detection
-PLATE_ASPECT_RATIO = (2, 5)  # Expected aspect ratio range for license plates (width/height)
-PLATE_MIN_SIZE = 20  # Minimum size (pixels) for plate detection
+PLATE_CONFIDENCE = 0.25      # Lower confidence threshold for better plate detection recall
+PLATE_ASPECT_RATIO = (1.0, 5.0)  # Wider aspect ratio range to catch more plates
+PLATE_MIN_SIZE = 20         # Lower minimum size to detect smaller plates
 
 # OCR settings
 OCR_LANGUAGES = ['en']  # Languages for OCR

@@ -101,47 +101,70 @@ class Detector:
             os.makedirs(debug_dir, exist_ok=True)
             cv2.imwrite(f"{debug_dir}/truck_roi_{len(trucks)}.jpg", truck_roi)
                 
-            # Detect plates in the truck ROI with lower confidence threshold
-            plate_results = self.plate_model(truck_roi, verbose=False, conf=0.2)[0]  # Lowered confidence threshold
-            
-            for plate_box in plate_results.boxes:
-                plate_conf = float(plate_box.conf[0])
-                if plate_conf < 0.2:  # Lowered confidence threshold
-                    continue
+            # Detect plates in the truck ROI with enhanced settings
+            try:
+                plate_results = self.plate_model(
+                    truck_roi,
+                    conf=PLATE_CONFIDENCE,
+                    imgsz=640,
+                    verbose=False
+                )[0]
+                
+                for plate_box in plate_results.boxes:
+                    plate_conf = float(plate_box.conf[0])
+                    if plate_conf < PLATE_CONFIDENCE:
+                        continue
+                        
+                    # Convert plate coordinates from ROI to full frame
+                    px1, py1, px2, py2 = map(int, plate_box.xyxy[0].tolist())
                     
-                # Convert plate coordinates from ROI to full frame
-                px1, py1, px2, py2 = map(int, plate_box.xyxy[0].tolist())
-                
-                # Calculate absolute coordinates
-                abs_x1 = roi_x1 + px1
-                abs_y1 = roi_y1 + py1
-                abs_x2 = roi_x1 + px2
-                abs_y2 = roi_y1 + py2
-                
-                # Skip if plate is too small
-                min_plate_size = 30  # Increased minimum plate size
-                if (abs_x2 - abs_x1) < min_plate_size or (abs_y2 - abs_y1) < min_plate_size:
-                    continue
-                
-                # Check aspect ratio (typical license plates are wide)
-                aspect_ratio = (abs_x2 - abs_x1) / (abs_y2 - abs_y1 + 1e-6)
-                if not (2.0 < aspect_ratio < 8.0):  # Typical aspect ratio for license plates
-                    continue
+                    # Calculate absolute coordinates
+                    abs_x1 = roi_x1 + px1
+                    abs_y1 = roi_y1 + py1
+                    abs_x2 = roi_x1 + px2
+                    abs_y2 = roi_y1 + py2
                     
-                # Add plate to results
-                plate = {
-                    'bbox': [abs_x1, abs_y1, abs_x2, abs_y2],
-                    'confidence': plate_conf,
-                    'class_id': self.plate_class_id,
-                    'class_name': 'license_plate',
-                    'truck_bbox': [x1, y1, x2, y2]  # Reference to parent truck
-                }
-                plates.append(plate)
-                
-                # Save debug image of the detected plate
-                plate_img = truck_roi[py1:py2, px1:px2]
-                if plate_img.size > 0:
-                    cv2.imwrite(f"{debug_dir}/plate_{len(plates)}_conf_{plate_conf:.2f}.jpg", plate_img)
+                    # Calculate dimensions and aspect ratio
+                    width = abs_x2 - abs_x1
+                    height = abs_y2 - abs_y1
+                    area = width * height
+                    aspect_ratio = width / max(height, 1e-6)
+                    
+                    # Skip if plate is too small or has invalid dimensions
+                    if width < PLATE_MIN_SIZE or height < PLATE_MIN_SIZE:
+                        print(f"[PLATE] Skipping small plate: {width}x{height} (min: {PLATE_MIN_SIZE})")
+                        continue
+                    
+                    # Check aspect ratio
+                    if not (PLATE_ASPECT_RATIO[0] <= aspect_ratio <= PLATE_ASPECT_RATIO[1]):
+                        print(f"[PLATE] Skipping due to aspect ratio: {aspect_ratio:.2f} (allowed: {PLATE_ASPECT_RATIO})")
+                        continue
+                    
+                    # Log the detection
+                    print(f"[PLATE] Detected: {abs_x1}x{abs_y1}-{abs_x2}x{abs_y2} "
+                          f"(conf: {plate_conf:.2f}, size: {width}x{height}, area: {area}, ar: {aspect_ratio:.2f})")
+                    
+                    # Add plate to results
+                    plate = {
+                        'bbox': [abs_x1, abs_y1, abs_x2, abs_y2],
+                        'confidence': plate_conf,
+                        'class_id': self.plate_class_id,
+                        'class_name': 'license_plate',
+                        'truck_bbox': [x1, y1, x2, y2],  # Reference to parent truck
+                        'area': area,
+                        'aspect_ratio': aspect_ratio
+                    }
+                    plates.append(plate)
+                    
+                    # Save debug image of the detected plate
+                    plate_img = truck_roi[py1:py2, px1:px2]
+                    if plate_img.size > 0:
+                        cv2.imwrite(f"{debug_dir}/plate_{len(plates)}_conf_{plate_conf:.2f}.jpg", plate_img)
+                        
+            except Exception as e:
+                print(f"[ERROR] Plate detection failed: {str(e)}")
+                import traceback
+                traceback.print_exc()
         
         # Fallback: If no plates found with the plate model, try other methods
         if not plates and trucks:

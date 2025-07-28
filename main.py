@@ -27,7 +27,8 @@ class TruckMonitoringSystem:
             languages=OCR_LANGUAGES,
             gpu=OCR_GPU
         )
-        self.classifier = TruckClassifier()
+        # Initialize classifier with the same model as detector for consistency
+        self.classifier = TruckClassifier(model_path=os.path.join(MODEL_DIR, YOLO_MODEL))
         # Initialize tracker
         self.tracker = Tracker(os.path.join(MODEL_DIR, YOLO_MODEL))
         # Keep track of plate IDs already read

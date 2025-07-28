@@ -1,18 +1,22 @@
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 import numpy as np
+import cv2
+from ultralytics import YOLO
 
 class TruckClassifier:
-    def __init__(self, min_plate_distance: float = 0.3, max_plate_distance: float = 0.8):
+    def __init__(self, min_plate_distance: float = 0.3, max_plate_distance: float = 0.8, model_path: str = 'yolov8s.pt'):
         """
         Initialize the truck classifier.
         
         Args:
             min_plate_distance: Minimum normalized distance between plates to consider them as separate
             max_plate_distance: Maximum normalized distance between plates to consider them as belonging to the same truck
+            model_path: Path to the YOLO model for truck classification
         """
         self.min_plate_distance = min_plate_distance
         self.max_plate_distance = max_plate_distance
         self.plate_pairs = {}  # Track plate pairs for each truck
+        self.model = YOLO(model_path) if model_path else None
     
     def _calculate_iou(self, box1: List[int], box2: List[int]) -> float:
         """Calculate Intersection over Union between two bounding boxes."""
@@ -34,6 +38,45 @@ class TruckClassifier:
         iou = intersection_area / union_area if union_area > 0 else 0.0
         
         return iou
+    
+    def classify(self, frame: np.ndarray, bbox: List[int]) -> Dict[str, Any]:
+        """
+        Classify a truck based on its visual features.
+        
+        Args:
+            frame: Input BGR image
+            bbox: Bounding box [x1, y1, x2, y2] of the truck
+            
+        Returns:
+            Dictionary containing classification results:
+            - 'class_name': Predicted class (e.g., 'truck', 'trailer')
+            - 'confidence': Confidence score (0-1)
+            - 'features': Extracted features (if any)
+        """
+        try:
+            # Extract the truck region
+            x1, y1, x2, y2 = map(int, bbox)
+            truck_roi = frame[max(0, y1):min(frame.shape[0], y2), 
+                            max(0, x1):min(frame.shape[1], x2)]
+            
+            if truck_roi.size == 0:
+                return {'class_name': 'unknown', 'confidence': 0.0, 'features': None}
+                
+            # Simple classification based on aspect ratio
+            height, width = truck_roi.shape[:2]
+            aspect_ratio = width / max(height, 1)
+            
+            # Basic classification rules
+            if aspect_ratio > 2.5:
+                return {'class_name': 'truck_with_trailer', 'confidence': 0.8, 'features': None}
+            elif aspect_ratio > 1.5:
+                return {'class_name': 'truck', 'confidence': 0.9, 'features': None}
+            else:
+                return {'class_name': 'van', 'confidence': 0.7, 'features': None}
+                
+        except Exception as e:
+            print(f"[ERROR] Classification failed: {str(e)}")
+            return {'class_name': 'unknown', 'confidence': 0.0, 'features': None}
     
     def _calculate_plate_distance(self, truck_bbox: List[int], plate_bbox: List[int]) -> float:
         """
